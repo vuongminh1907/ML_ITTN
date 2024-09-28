@@ -4,12 +4,16 @@ from PIL import Image
 import numpy as np
 from insightface.app import FaceAnalysis
 import time
+import av
 
 class Attendance:
-    def __init__(self):
+    def __init__(self,face_database=None):
         self.model = FaceAnalysis(name="buffalo_l", providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
         self.model.prepare(ctx_id=0, det_size=(640, 640))
+        self.face_dataset = face_database
 
+    def set_face_database(self,face_database):
+        self.face_dataset = face_database
     def get_embedding(self, image):
         face = self.model.get(image)
         if len(face) == 0:
@@ -20,7 +24,8 @@ class Attendance:
         cosine_similarity = np.dot(embedding1, embedding2) / (np.linalg.norm(embedding1) * np.linalg.norm(embedding2))
         cosine_distance = 1 - cosine_similarity
         return cosine_distance < 0.5
-    def use_web_cam(self, face_database):
+    def use_web_cam(self):
+        face_database = self.face_dataset
         cap = cv2.VideoCapture(0)
         while cap.isOpened():
             ret, frame = cap.read()
@@ -57,7 +62,8 @@ class Attendance:
         cv2.destroyAllWindows()
         return face_database
     
-    def check_attendence(self,image_dir,face_database):
+    def check_attendence(self,image_dir):
+        face_database = self.face_dataset
         image = cv2.imread(image_dir)
         face = self.get_embedding(image)
         if face is None:
@@ -76,7 +82,8 @@ class Attendance:
             cv2.imwrite(f"./face_database/{time.time()}.jpg", image)
             print(f"Save {time.time()}.jpg") 
 
-    def use_video(self,video_dir,face_database):
+    def use_video(self,video_dir):
+        face_database = self.face_dataset
         #read video
         cap = cv2.VideoCapture(video_dir)
         #resize and fps video
@@ -134,3 +141,10 @@ class Attendance:
             else:
                 image = cv2.putText(image, "Unknown", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)        
         return image
+
+    def callback(self, frame: av.VideoFrame) -> av.VideoFrame:
+
+        image = frame.to_ndarray(format="bgr24")
+        annotated_image = self.prediction_label(image)
+
+        return av.VideoFrame.from_ndarray(annotated_image, format="bgr24")
